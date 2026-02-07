@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  /* Map the CSS variables to Tailwind utility names */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-orange-500: hsl(24.6 95% 53.1%);
+}
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --primary: 24.6 95% 53.1%;
+  }
+
+  body {
+    /* Instead of @apply, we use standard CSS here to prevent crashes */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    margin: 0;
+    font-family: sans-serif;
+  }
+}
