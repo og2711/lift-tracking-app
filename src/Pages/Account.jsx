@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, User as UserIcon, Target, Ruler, Scale } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Trash2, User as UserIcon, Target, Ruler, Scale, Cloud } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from "../components/ui/button";
+import { updateProfile } from '../api'; // Ensure src/api.js exists!
 
 const GOAL_LABELS = {
   gain_muscle: 'Gain Muscle',
@@ -14,19 +15,48 @@ export default function Account() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [records, setRecords] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    // Using 'dyel-user' as per your previous logic
-    const savedUser = JSON.parse(localStorage.getItem('dyel-user') || '{"unit_system": "metric", "goal": "get_stronger", "height_cm": 180, "weight_kg": 85}');
-    const savedRecords = JSON.parse(localStorage.getItem('dyel-records') || '[]');
-    setUser(savedUser);
-    setRecords(savedRecords);
+    // 1. Load data from local storage
+    const localUser = localStorage.getItem('dyel-user');
+    const localRecords = localStorage.getItem('dyel-records');
+
+    // 2. Set state with fallbacks to prevent "blank" screens
+    if (localUser) {
+      setUser(JSON.parse(localUser));
+    } else {
+      setUser({
+        full_name: 'Active User',
+        unit_system: 'metric',
+        goal: 'get_stronger',
+        height_cm: 180,
+        weight_kg: 85
+      });
+    }
+
+    setRecords(localRecords ? JSON.parse(localRecords) : []);
   }, []);
+
+  const handleSyncToCloud = async () => {
+    setIsSyncing(true);
+    try {
+      // Sends the current state to our Node server on port 5001
+      await updateProfile(user); 
+      alert("✅ Profile synced to Supabase!");
+    } catch (err) {
+      console.error("Sync error:", err);
+      // Check the SERVER terminal for the real error reason!
+      alert("❌ Sync failed. Check server console for 400 details.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleDeleteData = () => {
     if (window.confirm(`WARNING: This will permanently wipe your profile and all ${records.length} lift records. Proceed?`)) {
       localStorage.clear();
-      window.location.href = '/onboarding'; // Send them back to start
+      window.location.href = '/onboarding';
     }
   };
 
@@ -41,19 +71,29 @@ export default function Account() {
       <div className="max-w-md mx-auto">
         
         {/* Header */}
-        <header className="flex items-center gap-4 mb-10 pt-2">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="rounded-2xl bg-[#111] border border-white/10 text-white w-12 h-12"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft size={20} />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-black uppercase italic tracking-tighter leading-none">Profile</h1>
-            <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] mt-1">Athlete Data</p>
+        <header className="flex items-center justify-between mb-10 pt-2">
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-2xl bg-[#111] border border-white/10 text-white w-12 h-12"
+              onClick={() => navigate(-1)}
+            >
+              <ArrowLeft size={20} />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-black uppercase italic tracking-tighter leading-none">Profile</h1>
+              <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] mt-1">Athlete Data</p>
+            </div>
           </div>
+
+          <Button 
+            onClick={handleSyncToCloud}
+            disabled={isSyncing}
+            className="rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold h-10 px-4 transition-all active:scale-95"
+          >
+            {isSyncing ? "Syncing..." : <><Cloud size={16} className="mr-2" /> Sync</>}
+          </Button>
         </header>
 
         {/* User Identity Card */}

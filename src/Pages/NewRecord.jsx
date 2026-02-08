@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { saveLift } from '../api'; // Added for cloud sync
 
-// 1. The Exercise Database
 const EXERCISE_DEFAULTS = {
   Chest: ["Bench Press (Barbell)", "Incline DB Press", "Cable Flys", "Chest Press Machine", "Dips"],
   Back: ["Deadlift", "Lat Pulldown", "Bent Over Row", "Seated Cable Row", "Pull Ups"],
@@ -32,8 +32,8 @@ export default function NewRecord() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [records, setRecords] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   
-  // Initialize record with all necessary fields
   const [record, setRecord] = useState({
     date: new Date().toISOString().split('T')[0],
     body_part: '',
@@ -46,25 +46,22 @@ export default function NewRecord() {
     one_rep_max: 0,
   });
 
-  // Load history from LocalStorage
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem('dyel-records') || '[]');
     setRecords(saved);
   }, []);
 
-  // Auto-calculate 1RM using Brzycki Formula
   useEffect(() => {
     if (record.working_weight && record.max_reps) {
       const weight = parseFloat(record.working_weight);
       const reps = parseFloat(record.max_reps);
-      if (weight > 0 && reps > 0 && reps < 37) {
+      if (weight > 0 && reps > 0 && reps < 37 && !record.one_rep_max) {
         const oneRM = Math.round(weight * (36 / (37 - reps)));
         setRecord(prev => ({ ...prev, one_rep_max: oneRM }));
       }
     }
   }, [record.working_weight, record.max_reps]);
 
-  // Logic for Personal Best and History Table
   const exerciseHistory = records.filter(r => 
     r.exercise_name && record.exercise_name &&
     r.exercise_name.toLowerCase() === record.exercise_name.toLowerCase()
@@ -74,10 +71,32 @@ export default function NewRecord() {
     ? Math.max(...exerciseHistory.map(r => r.one_rep_max || 0)) 
     : 0;
 
-  const handleSave = () => {
-    const updatedRecords = [record, ...records];
-    localStorage.setItem('dyel-records', JSON.stringify(updatedRecords));
-    navigate('/');
+  // UPDATED HANDLE SAVE: Logic stays same, plus adds cloud sync
+  const handleSave = async () => {
+    setIsSyncing(true);
+    try {
+      // 1. Save to Cloud
+      await saveLift({
+        exercise_name: record.exercise_name,
+        weight: record.working_weight,
+        reps: record.max_reps,
+        notes: `1RM: ${record.one_rep_max} | Type: ${record.training_split}`,
+        date: record.date
+      });
+
+      // 2. Save to Local (Original Logic)
+      const updatedRecords = [record, ...records];
+      localStorage.setItem('dyel-records', JSON.stringify(updatedRecords));
+      
+      navigate('/');
+    } catch (err) {
+      console.error("Cloud save failed, saving locally only.");
+      const updatedRecords = [record, ...records];
+      localStorage.setItem('dyel-records', JSON.stringify(updatedRecords));
+      navigate('/');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -105,7 +124,6 @@ export default function NewRecord() {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* STEP 1: BODY PART */}
           {step === 1 && (
             <motion.div 
               key="step1"
@@ -128,7 +146,6 @@ export default function NewRecord() {
             </motion.div>
           )}
 
-          {/* STEP 2: EXERCISE NAME */}
           {step === 2 && (
             <motion.div 
               key="step2"
@@ -173,7 +190,6 @@ export default function NewRecord() {
             </motion.div>
           )}
 
-          {/* STEP 3: WORKOUT DETAILS */}
           {step === 3 && (
             <motion.div 
               key="step3"
@@ -181,7 +197,7 @@ export default function NewRecord() {
               animate={{ opacity: 1, y: 0 }}
               className="flex flex-col gap-6 pb-10"
             >
-              {/* PERSONAL BEST CARD */}
+              {/* PB CARD */}
               <div className="bg-orange-500 p-6 rounded-4xl shadow-xl shadow-orange-500/20 text-white relative overflow-hidden">
                 <div className="relative z-10">
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-80 italic">Personal Best</p>
@@ -193,7 +209,7 @@ export default function NewRecord() {
                 <span className="absolute -right-4 -bottom-4 text-7xl font-black italic opacity-10 select-none">BEST</span>
               </div>
 
-              {/* TOP ROW: DATE & TYPE */}
+              {/* INPUTS GRID */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-white/30 uppercase ml-2 tracking-widest">Date</label>
@@ -222,7 +238,6 @@ export default function NewRecord() {
                 </div>
               </div>
 
-              {/* DATA FIELDS GRID */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-white/30 uppercase text-center block">Warmup (kg)</label>
@@ -244,12 +259,15 @@ export default function NewRecord() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-orange-500 uppercase text-center block tracking-tighter">1 Rep Max (kg)</label>
+                  <label className="text-[10px] font-black text-orange-500 uppercase text-center block tracking-tighter">
+                    1 Rep Max (kg)
+                  </label>
                   <Input 
                     type="number" 
                     className="bg-[#111] border-orange-500/40 h-16 text-center text-xl font-black rounded-2xl border-2 text-orange-500"
                     value={record.one_rep_max}
-                    onChange={(e) => setRecord({...record, one_rep_max: parseFloat(e.target.value) || 0})} 
+                    onChange={(e) => setRecord({...record, one_rep_max: parseFloat(e.target.value) || ''})} 
+                    placeholder="Enter Max"
                   />
                 </div>
                 <div className="space-y-2">
@@ -261,19 +279,9 @@ export default function NewRecord() {
                     onChange={(e) => setRecord({...record, max_reps: e.target.value})} 
                   />
                 </div>
-                <div className="space-y-2 col-span-2">
-                  <label className="text-[10px] font-black text-white/30 uppercase text-center block">Max Sets</label>
-                  <Input 
-                    type="number" 
-                    placeholder="1"
-                    className="bg-[#111] border-white/5 h-16 text-center text-xl font-black rounded-2xl"
-                    value={record.max_sets}
-                    onChange={(e) => setRecord({...record, max_sets: e.target.value})} 
-                  />
-                </div>
               </div>
 
-              {/* LAST 10 RECORDS TABLE */}
+              {/* HISTORY TABLE */}
               <div className="mt-4">
                 <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-3">Last 10 Records</p>
                 <div className="bg-[#111] rounded-2xl overflow-hidden border border-white/5">
@@ -299,18 +307,15 @@ export default function NewRecord() {
                       ))}
                     </tbody>
                   </table>
-                  {exerciseHistory.length === 0 && (
-                    <div className="p-6 text-center text-white/10 text-[10px] uppercase font-black">No History Found</div>
-                  )}
                 </div>
               </div>
 
               <Button 
                 onClick={handleSave} 
-                className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white font-black text-xl rounded-2xl mt-4 italic uppercase transition-all shadow-lg shadow-orange-500/20"
-                disabled={!record.working_weight || !record.max_reps}
+                className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white font-black text-xl rounded-2xl mt-4 italic uppercase shadow-lg shadow-orange-500/20"
+                disabled={!record.working_weight || !record.max_reps || isSyncing}
               >
-                Save Record
+                {isSyncing ? "Syncing..." : "Save Record"}
               </Button>
             </motion.div>
           )}
