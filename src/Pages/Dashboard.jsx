@@ -119,7 +119,7 @@ export default function Dashboard() {
               <Zap size={14} className="text-orange-500/40" />
             </div>
             
-            <div className="relative h-[70px] overflow-hidden">
+            <div className="relative h-17.5 overflow-hidden">
               {allMaxes.length > 0 ? (
                 <motion.div
                   animate={{ y: allMaxes.length > 1 ? allMaxes.map((_, i) => -(i * 80)) : 0 }}
@@ -132,7 +132,7 @@ export default function Dashboard() {
                   className="flex flex-col"
                 >
                   {[...allMaxes, ...allMaxes].map((max, idx) => (
-                    <div key={idx} className="h-[50px] mb-[30px] flex flex-col justify-center">
+                    <div key={idx} className="h-12.5 mb-7.5 flex flex-col justify-center">
                       <p className="text-3xl font-black text-white tracking-tighter leading-none mb-1">
                         {max.weight}<span className="text-[10px] text-orange-500 ml-1 italic font-bold">{weightUnit}</span>
                       </p>
@@ -146,7 +146,7 @@ export default function Dashboard() {
                 <h2 className="text-xs font-black italic uppercase text-white/20">No data</h2>
               )}
             </div>
-            <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#111] via-[#111]/90 to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-10 bg-linear-to-t from-[#111] via-[#111]/90 to-transparent pointer-events-none" />
           </div>
         </div>
 
