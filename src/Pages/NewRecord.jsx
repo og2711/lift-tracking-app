@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { saveLift } from '../api'; // Added for cloud sync
+
+// SEQUENTIAL UPDATE: Import our new smart service
+import { saveWorkout } from '../services/workoutService';
 
 const EXERCISE_DEFAULTS = {
   Chest: ["Bench Press (Barbell)", "Incline DB Press", "Cable Flys", "Chest Press Machine", "Dips"],
@@ -46,17 +48,20 @@ export default function NewRecord() {
     one_rep_max: 0,
   });
 
+  // Load history - Keeping localStorage here temporarily for UI table consistency
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem('dyel-records') || '[]');
     setRecords(saved);
   }, []);
 
+  // 1RM Calculation Logic (Epley Formula)
   useEffect(() => {
     if (record.working_weight && record.max_reps) {
       const weight = parseFloat(record.working_weight);
       const reps = parseFloat(record.max_reps);
-      if (weight > 0 && reps > 0 && reps < 37 && !record.one_rep_max) {
-        const oneRM = Math.round(weight * (36 / (37 - reps)));
+      if (weight > 0 && reps > 0 && reps < 37) {
+        // Correct 1RM formula: Weight * (1 + 0.0333 * reps)
+        const oneRM = Math.round(weight * (1 + 0.0333 * reps));
         setRecord(prev => ({ ...prev, one_rep_max: oneRM }));
       }
     }
@@ -71,29 +76,33 @@ export default function NewRecord() {
     ? Math.max(...exerciseHistory.map(r => r.one_rep_max || 0)) 
     : 0;
 
-  // UPDATED HANDLE SAVE: Logic stays same, plus adds cloud sync
+  // SEQUENTIAL UPDATE: Production-Ready handleSave
   const handleSave = async () => {
+    if (!record.working_weight || !record.max_reps) return;
+    
     setIsSyncing(true);
     try {
-      // 1. Save to Cloud
-      await saveLift({
+      // Data scrubbing for Supabase (Ensuring types match database columns)
+      await saveWorkout({
         exercise_name: record.exercise_name,
-        weight: record.working_weight,
-        reps: record.max_reps,
-        notes: `1RM: ${record.one_rep_max} | Type: ${record.training_split}`,
-        date: record.date
+        body_part: record.body_part,
+        weight: parseFloat(record.working_weight),
+        reps: parseInt(record.max_reps),
+        one_rep_max: record.one_rep_max,
+        training_split: record.training_split,
+        date: record.date,
+        // Safety fix: Convert empty string to 0 or null for the numeric column
+        warmup_weight: record.warmup_weight && record.warmup_weight !== "" ? parseFloat(record.warmup_weight) : 0
       });
 
-      // 2. Save to Local (Original Logic)
+      // Update local storage so the Dashboard sees it immediately
       const updatedRecords = [record, ...records];
       localStorage.setItem('dyel-records', JSON.stringify(updatedRecords));
       
       navigate('/');
     } catch (err) {
-      console.error("Cloud save failed, saving locally only.");
-      const updatedRecords = [record, ...records];
-      localStorage.setItem('dyel-records', JSON.stringify(updatedRecords));
-      navigate('/');
+      console.error("Save process failed:", err);
+      alert("Error saving record. Check connection.");
     } finally {
       setIsSyncing(false);
     }

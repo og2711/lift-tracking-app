@@ -1,0 +1,11 @@
+{
+  "appId": "com.dyel.liftracker",
+  "appName": "Lift Tracker",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "Preferences": {
+      "group": "com.dyel.liftracker.preferences"
+    }
+  }
+}
